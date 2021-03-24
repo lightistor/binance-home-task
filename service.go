@@ -134,7 +134,7 @@ func (s *service) GetTopSymbols(
 		}
 	}
 
-	log.WithField("quoteAsset", quoteAsset).Infof(
+	log.WithField("quoteAsset", quoteAsset).Debugf(
 		"Found %d symbols to sort", len(symbols))
 
 	sort(symbols)

@@ -40,6 +40,11 @@ func main() {
 	router.HandleFunc("/live", health.LiveEndpoint)
 	router.HandleFunc("/ready", health.ReadyEndpoint)
 
+	client := NewApiClient()
+	service := NewMarketDataService(&client)
+	background := NewBackgroundService(&service)
+	go background.Start()
+
 	log.WithField("listen-addres", listenAddress).Info("Starting HTTP server")
 	log.Fatal(http.ListenAndServe(listenAddress, (middlewares{c.tracing, c.logging}).apply(router)))
 }

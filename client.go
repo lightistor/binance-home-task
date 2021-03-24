@@ -37,12 +37,12 @@ func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 	var info *ExchangeInfoResponse
 	if x, found := clientCache.Get(EXCHANGE_INFO_KEY); found {
 		info = x.(*ExchangeInfoResponse)
-		log.Info("Used cache to get exchange info")
+		log.Debug("Used cache to get exchange info")
 		return info, nil
 	}
 
 	u := apiBaseUrl + "/api/v3/exchangeInfo"
-	log.Infof("GET %s", u)
+	log.Debugf("GET %s", u)
 	response, err := http.Get(u)
 
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 
 	clientCache.Set(EXCHANGE_INFO_KEY, info, time.Duration(1)*time.Minute)
 
-	log.Info("Completed request to get exchange info")
+	log.Debug("Completed request to get exchange info")
 	return info, nil
 }
 
@@ -69,23 +69,23 @@ func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatic
 	var stats []*TickerChangeStatics
 	if x, found := clientCache.Get(TICKER_KEY + symbol); found {
 		stats = x.([]*TickerChangeStatics)
-		log.Info("Used cache to get ticker change statistics")
+		log.Debug("Used cache to get ticker change statistics")
 		return stats, nil
 	}
 
 	var u string
 	var isArray bool
 	if symbol != "" {
-		log.WithField("symbol", symbol).Infof("Get ticker change statistics for %s", symbol)
+		log.WithField("symbol", symbol).Debugf("Get ticker change statistics for %s", symbol)
 		u = apiBaseUrl + "/api/v3/ticker/24hr?symbol=" + symbol
 		isArray = false
 	} else {
-		log.Info("Get ticker change statistics for all symbols")
+		log.Debug("Get ticker change statistics for all symbols")
 		u = apiBaseUrl + "/api/v3/ticker/24hr"
 		isArray = true
 	}
 
-	log.Infof("GET %s", u)
+	log.Debugf("GET %s", u)
 	response, err := http.Get(u)
 	if err != nil {
 		log.Error(err.Error())
@@ -112,7 +112,7 @@ func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatic
 
 	clientCache.Set(TICKER_KEY+symbol, stats, cache.DefaultExpiration)
 
-	log.WithField("count", len(stats)).Info("Completed request to get ticker change statistics")
+	log.WithField("count", len(stats)).Debug("Completed request to get ticker change statistics")
 	return stats, nil
 }
 
@@ -122,7 +122,7 @@ func (c *client) GetOrderBook(symbol string, limit int) (*OrderBook, error) {
 	v.Set("symbol", symbol)
 	u := apiBaseUrl + "/api/v3/depth?" + v.Encode()
 
-	log.Infof("GET %s", u)
+	log.Debugf("GET %s", u)
 	response, err := http.Get(u)
 	if err != nil {
 		log.Error(err)
@@ -152,6 +152,6 @@ func (c *client) GetOrderBook(symbol string, limit int) (*OrderBook, error) {
 		return nil, err
 	}
 
-	log.WithField("symbol", symbol).Info("Completed request to get order book")
+	log.WithField("symbol", symbol).Debug("Completed request to get order book")
 	return &orderBook, nil
 }
