@@ -12,7 +12,7 @@ func healtcheck() healthcheck.Handler {
 	// App is not ready if can't resolve the upstream dependency in DNS.
 	health.AddReadinessCheck(
 		"upstream-dep-dns",
-		healthcheck.DNSResolveCheck(apiUrl, 50*time.Millisecond))
+		healthcheck.DNSResolveCheck(apiBaseUrl, 50*time.Millisecond))
 
 	// Our app is not happy if we've got more than 100 goroutines running.
 	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))

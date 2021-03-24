@@ -10,26 +10,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type key int
+type middleware func(http.Handler) http.Handler
+type middlewares []middleware
 
-const (
-	requestIDKey key = 0
-)
+type controller struct {
+	logger        *log.Logger
+	nextRequestID func() string
+}
 
 var (
-	apiUrl        string
+	apiBaseUrl    string
 	listenAddress string
 )
 
 func main() {
 
-	flag.StringVar(&apiUrl, "api-url", "https://api.binance.com", "public Rest API for Binance")
+	flag.StringVar(&apiBaseUrl, "api-base-url", "https://api.binance.com", "public Rest API for Binance")
 	flag.StringVar(&listenAddress, "listen-addres", ":8080", "server listen address")
 	flag.Parse()
 
 	c := &controller{logger: log.New(), nextRequestID: func() string { return strconv.FormatInt(time.Now().UnixNano(), 36) }}
 
 	router := http.NewServeMux()
+	router.HandleFunc("/", c.index)
 
 	router.Handle("/metrics", promhttp.Handler())
 

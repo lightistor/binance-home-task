@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{.PageTitle}}</title>
+    <style>
+        table,
+        td {
+            border: 1px solid #333;
+        }
+
+        thead,
+        tfoot {
+            background-color: #333;
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <section>
+        <h3>{{ .TopVolumes.Title }}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .TopVolumes.Stats}}
+                <tr>
+                    <td>{{ .Symbol }}</td>
+                    <td>{{ printf "%.2f" .Volume }}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="2">no data</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>{{ .TopNumberOfTrades.Title }}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Number</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .TopNumberOfTrades.Stats}}
+                <tr>
+                    <td>{{ .Symbol }}</td>
+                    <td>{{ .Tradecount }}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="2">no data</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </section>
+</body>
+
+</html>
