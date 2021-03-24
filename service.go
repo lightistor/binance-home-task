@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"sort"
-	"strconv"
 
+	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,15 +27,15 @@ type MarketData struct {
 
 type TotalNotionalValue struct {
 	Symbol    string
-	AsksTotal float64
-	BidsTotal float64
+	AsksTotal decimal.Decimal
+	BidsTotal decimal.Decimal
 }
 
 type Spread struct {
 	Symbol     string
-	HighestBid float64
-	LowestAsk  float64
-	Value      float64
+	HighestBid decimal.Decimal
+	LowestAsk  decimal.Decimal
+	Value      decimal.Decimal
 }
 
 type stats []*TickerChangeStatics
@@ -159,23 +159,23 @@ func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, err
 		return nil, err
 	}
 
-	var asksTotal, bidsTotal, price, qty float64
+	var asksTotal, bidsTotal, price, qty decimal.Decimal
 	if len(book.Asks) > count {
 		book.Asks = book.Asks[:count]
 	}
 	for _, v := range book.Asks {
-		price, _ = strconv.ParseFloat(v[0], 64)
-		qty, _ = strconv.ParseFloat(v[1], 64)
-		asksTotal += price * qty
+		price, _ = decimal.NewFromString(v[0])
+		qty, _ = decimal.NewFromString(v[1])
+		asksTotal = asksTotal.Add(price.Mul(qty))
 	}
 
 	if len(book.Bids) > count {
 		book.Bids = book.Asks[:count]
 	}
 	for _, v := range book.Bids {
-		price, _ = strconv.ParseFloat(v[0], 64)
-		qty, _ = strconv.ParseFloat(v[1], 64)
-		bidsTotal += price * qty
+		price, _ = decimal.NewFromString(v[0])
+		qty, _ = decimal.NewFromString(v[1])
+		bidsTotal = bidsTotal.Add(price.Mul(qty))
 	}
 
 	return &TotalNotionalValue{
@@ -199,10 +199,10 @@ func (s *service) getSpread(symbol string) (*Spread, error) {
 		return nil, errors.New("empty bids or asks in order book")
 	}
 
-	var hbid, lask, spread float64
-	hbid, _ = strconv.ParseFloat(book.Bids[0][0], 64)
-	lask, _ = strconv.ParseFloat(book.Asks[0][0], 64)
-	spread = lask - hbid
+	var hbid, lask, spread decimal.Decimal
+	hbid, _ = decimal.NewFromString(book.Bids[0][0])
+	lask, _ = decimal.NewFromString(book.Asks[0][0])
+	spread = lask.Add(hbid.Neg())
 
 	return &Spread{
 		Symbol:     symbol,

@@ -63,25 +63,25 @@ type Filter struct {
 }
 
 type TickerChangeStatics struct {
-	Symbol             string  `json:"symbol"`
-	Pricechange        float64 `json:"priceChange,string"`
-	Pricechangepercent float64 `json:"priceChangePercent,string"`
-	Weightedavgprice   float64 `json:"weightedAvgPrice,string"`
-	Prevcloseprice     float64 `json:"prevClosePrice,string"`
-	Lastprice          float64 `json:"lastPrice,string"`
-	Lastqty            float64 `json:"lastQty,string"`
-	Bidprice           float64 `json:"bidPrice,string"`
-	Askprice           float64 `json:"askPrice,string"`
-	Openprice          float64 `json:"openPrice,string"`
-	Highprice          float64 `json:"highPrice,string"`
-	Lowprice           float64 `json:"lowPrice,string"`
-	Volume             float64 `json:"volume,string"`
-	Quotevolume        float64 `json:"quoteVolume,string"`
-	Opentime           int64   `json:"openTime"`
-	Closetime          int64   `json:"closeTime"`
-	Firsttradeid       int     `json:"firstId"`
-	Lasttradeid        int     `json:"lastId"`
-	Tradecount         int     `json:"count"`
+	Symbol             string `json:"symbol"`
+	Pricechange        string `json:"priceChange"`
+	Pricechangepercent string `json:"priceChangePercent"`
+	Weightedavgprice   string `json:"weightedAvgPrice"`
+	Prevcloseprice     string `json:"prevClosePrice"`
+	Lastprice          string `json:"lastPrice"`
+	Lastqty            string `json:"lastQty"`
+	Bidprice           string `json:"bidPrice"`
+	Askprice           string `json:"askPrice"`
+	Openprice          string `json:"openPrice"`
+	Highprice          string `json:"highPrice"`
+	Lowprice           string `json:"lowPrice"`
+	Volume             string `json:"volume"`
+	Quotevolume        string `json:"quoteVolume"`
+	Opentime           int64  `json:"openTime"`
+	Closetime          int64  `json:"closeTime"`
+	Firsttradeid       int    `json:"firstId"`
+	Lasttradeid        int    `json:"lastId"`
+	Tradecount         int    `json:"count"`
 }
 
 type OrderBook struct {
