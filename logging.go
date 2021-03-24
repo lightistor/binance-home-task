@@ -8,7 +8,9 @@ import (
 )
 
 func init() {
-	log.SetFormatter(&log.TextFormatter{})
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 
 	log.SetLevel(log.InfoLevel)
 }

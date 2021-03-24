@@ -53,6 +53,7 @@ func (b *background) backgroundTask() {
 			if delta.IsPositive() {
 				deltaSign = "+"
 			} else if delta.IsNegative() {
+				// delta has '-' already
 				deltaSign = ""
 			} else {
 				// no change
