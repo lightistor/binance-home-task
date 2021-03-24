@@ -15,11 +15,17 @@ type NotionalValuesSection struct {
 	Values []*TotalNotionalValue
 }
 
+type SpreadsSection struct {
+	Title  string
+	Values []*Spread
+}
+
 type PageData struct {
 	PageTitle           string
 	TopVolumes          StatsSection
 	TopNumberOfTrades   StatsSection
 	TotalNotionalValues NotionalValuesSection
+	SpreadValues        SpreadsSection
 }
 
 func (c *controller) index(w http.ResponseWriter, req *http.Request) {
@@ -47,6 +53,10 @@ func (c *controller) index(w http.ResponseWriter, req *http.Request) {
 		TotalNotionalValues: NotionalValuesSection{
 			Title:  "Total notional value of the top 200 bids and asks",
 			Values: marketData.TotalNotionalValues,
+		},
+		SpreadValues: SpreadsSection{
+			Title:  "Bid-Ask spread",
+			Values: marketData.Spreads,
 		},
 	}
 	tmpl.Execute(w, data)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 
@@ -8,10 +9,8 @@ import (
 )
 
 const (
-	NO_VALUE         string = ""
-	ITEMS_COUNT      int    = 5
-	ORDER_BOOK_COUNT        = 200
-	ORDER_BOOK_LIMIT        = 500
+	NO_VALUE    string = ""
+	ITEMS_COUNT int    = 5
 )
 
 type MarketDataQuery struct {
@@ -23,12 +22,20 @@ type MarketData struct {
 	TopVolume           []*TickerChangeStatics
 	TopNumberOfTrades   []*TickerChangeStatics
 	TotalNotionalValues []*TotalNotionalValue
+	Spreads             []*Spread
 }
 
 type TotalNotionalValue struct {
 	Symbol    string
 	AsksTotal float64
 	BidsTotal float64
+}
+
+type Spread struct {
+	Symbol     string
+	HighestBid float64
+	LowestAsk  float64
+	Value      float64
 }
 
 type stats []*TickerChangeStatics
@@ -98,9 +105,12 @@ func (s *service) GetMarketData(q *MarketDataQuery) (*MarketData, error) {
 	sort.Sort(ByNumberOfTrades{numberOfTrades})
 
 	topVolumes := volumes[:ITEMS_COUNT]
+	topNumberOfTrades := numberOfTrades[:ITEMS_COUNT]
 
-	var totalNotionalValues = make([]*TotalNotionalValue, ITEMS_COUNT)
-	var sem = make(chan int, ITEMS_COUNT) // semaphore pattern
+	totalNotionalValues := make([]*TotalNotionalValue, ITEMS_COUNT)
+	spreadValues := make([]*Spread, ITEMS_COUNT)
+	queuSize := ITEMS_COUNT * 2
+	sem := make(chan int, queuSize) // semaphore pattern
 	for i, v := range topVolumes {
 		v1 := v
 		i1 := i
@@ -113,29 +123,45 @@ func (s *service) GetMarketData(q *MarketDataQuery) (*MarketData, error) {
 		}()
 	}
 
+	for i, v := range topNumberOfTrades {
+		v1 := v
+		i1 := i
+		go func() {
+			value, err := s.getSpread(v1.Symbol)
+			if err == nil {
+				spreadValues[i1] = value
+			}
+			sem <- 1
+		}()
+	}
+
 	log.Info("Wait for goroutines to finish")
-	for i := 0; i < ITEMS_COUNT; i++ {
+	for i := 0; i < queuSize; i++ {
 		<-sem
 	}
 	log.Info("All goroutines finished")
 
 	return &MarketData{
 		TopVolume:           topVolumes,
-		TopNumberOfTrades:   numberOfTrades[:ITEMS_COUNT],
+		TopNumberOfTrades:   topNumberOfTrades,
 		TotalNotionalValues: totalNotionalValues,
+		Spreads:             spreadValues,
 	}, nil
 }
 
 func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, error) {
-	book, err := s.client.GetOrderBook(symbol, ORDER_BOOK_LIMIT)
+	limit := 500
+	count := 200
+
+	book, err := s.client.GetOrderBook(symbol, limit)
 	if err != nil {
 		log.WithField("symbol", symbol).Errorf("Error occurred while getting order book for %s", symbol)
 		return nil, err
 	}
 
 	var asksTotal, bidsTotal, price, qty float64
-	if len(book.Asks) > ORDER_BOOK_COUNT {
-		book.Asks = book.Asks[:ORDER_BOOK_COUNT]
+	if len(book.Asks) > count {
+		book.Asks = book.Asks[:count]
 	}
 	for _, v := range book.Asks {
 		price, _ = strconv.ParseFloat(v[0], 64)
@@ -143,8 +169,8 @@ func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, err
 		asksTotal += price * qty
 	}
 
-	if len(book.Bids) > ORDER_BOOK_COUNT {
-		book.Bids = book.Asks[:ORDER_BOOK_COUNT]
+	if len(book.Bids) > count {
+		book.Bids = book.Asks[:count]
 	}
 	for _, v := range book.Bids {
 		price, _ = strconv.ParseFloat(v[0], 64)
@@ -156,5 +182,32 @@ func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, err
 		Symbol:    symbol,
 		AsksTotal: asksTotal,
 		BidsTotal: bidsTotal,
+	}, nil
+}
+
+func (s *service) getSpread(symbol string) (*Spread, error) {
+	limit := 5
+
+	book, err := s.client.GetOrderBook(symbol, limit)
+	if err != nil {
+		log.WithField("symbol", symbol).Errorf("Error occurred while getting order book for %s", symbol)
+		return nil, err
+	}
+
+	// not sure if this edge case is possible and how to calc spread
+	if len(book.Bids) == 0 || len(book.Asks) == 0 {
+		return nil, errors.New("empty bids or asks in order book")
+	}
+
+	var hbid, lask, spread float64
+	hbid, _ = strconv.ParseFloat(book.Bids[0][0], 64)
+	lask, _ = strconv.ParseFloat(book.Asks[0][0], 64)
+	spread = lask - hbid
+
+	return &Spread{
+		Symbol:     symbol,
+		HighestBid: hbid,
+		LowestAsk:  lask,
+		Value:      spread,
 	}, nil
 }

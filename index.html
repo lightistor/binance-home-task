@@ -93,6 +93,34 @@
         </table>
     </section>
 
+    <section>
+        <h3>{{ .SpreadValues.Title }}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Highest Bid</th>
+                    <th>Lowest Price</th>
+                    <th>Spread</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .SpreadValues.Values}}
+                <tr>
+                    <td>{{ .Symbol }}</td>
+                    <td>{{ .HighestBid }}</td>
+                    <td>{{ .LowestAsk }}</td>
+                    <td>{{ .Value }}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="4">no data</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </section>
+
 </body>
 
 </html>
