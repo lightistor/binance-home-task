@@ -29,7 +29,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{range .TopVolumes.Stats}}
+                {{range .TopVolumes.Values}}
                 <tr>
                     <td>{{ .Symbol }}</td>
                     <td>{{ .Volume }}</td>
@@ -53,10 +53,10 @@
                 </tr>
             </thead>
             <tbody>
-                {{range .TopNumberOfTrades.Stats}}
+                {{range .TopNumberOfTrades.Values}}
                 <tr>
                     <td>{{ .Symbol }}</td>
-                    <td>{{ .Tradecount }}</td>
+                    <td>{{ .TradeCount }}</td>
                 </tr>
                 {{else}}
                 <tr>
@@ -100,7 +100,7 @@
                 <tr>
                     <th>Symbol</th>
                     <th>Highest Bid</th>
-                    <th>Lowest Price</th>
+                    <th>Lowest Ask</th>
                     <th>Spread</th>
                 </tr>
             </thead>

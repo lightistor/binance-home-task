@@ -6,8 +6,19 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	EXCHANGE_INFO_KEY = "exchangeInfo"
+	TICKER_KEY        = "ticker"
+)
+
+var (
+	clientCache = cache.New(time.Duration(1)*time.Second, time.Duration(1)*time.Second)
 )
 
 type ApiClient interface {
@@ -23,6 +34,13 @@ func NewApiClient() ApiClient {
 }
 
 func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
+	var info *ExchangeInfoResponse
+	if x, found := clientCache.Get(EXCHANGE_INFO_KEY); found {
+		info = x.(*ExchangeInfoResponse)
+		log.Info("Used cache to get exchange info")
+		return info, nil
+	}
+
 	u := apiBaseUrl + "/api/v3/exchangeInfo"
 	log.Infof("GET %s", u)
 	response, err := http.Get(u)
@@ -36,17 +54,25 @@ func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 		log.Fatal(err)
 	}
 
-	var exchangeInfo ExchangeInfoResponse
-	err = json.Unmarshal(responseData, &exchangeInfo)
+	err = json.Unmarshal(responseData, &info)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	clientCache.Set(EXCHANGE_INFO_KEY, info, time.Duration(1)*time.Minute)
+
 	log.Info("Completed request to get exchange info")
-	return &exchangeInfo, nil
+	return info, nil
 }
 
 func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatics, error) {
+	var stats []*TickerChangeStatics
+	if x, found := clientCache.Get(TICKER_KEY + symbol); found {
+		stats = x.([]*TickerChangeStatics)
+		log.Info("Used cache to get ticker change statistics")
+		return stats, nil
+	}
+
 	var u string
 	var isArray bool
 	if symbol != "" {
@@ -72,26 +98,22 @@ func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatic
 		return nil, err
 	}
 
-	var tickerChangeStatics []TickerChangeStatics
 	if isArray {
-		err = json.Unmarshal(responseData, &tickerChangeStatics)
+		err = json.Unmarshal(responseData, &stats)
 	} else {
 		var item TickerChangeStatics
 		err = json.Unmarshal(responseData, &item)
-		tickerChangeStatics = []TickerChangeStatics{item}
+		stats = []*TickerChangeStatics{&item}
 	}
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
-	log.WithField("count", len(tickerChangeStatics)).Info("Completed request to get ticker change statistics")
+	clientCache.Set(TICKER_KEY+symbol, stats, cache.DefaultExpiration)
 
-	var result = []*TickerChangeStatics{}
-	for i := range tickerChangeStatics {
-		result = append(result, &tickerChangeStatics[i])
-	}
-	return result, nil
+	log.WithField("count", len(stats)).Info("Completed request to get ticker change statistics")
+	return stats, nil
 }
 
 func (c *client) GetOrderBook(symbol string, limit int) (*OrderBook, error) {
@@ -130,6 +152,6 @@ func (c *client) GetOrderBook(symbol string, limit int) (*OrderBook, error) {
 		return nil, err
 	}
 
-	log.WithField("symbol", symbol).Infof("Completed request to get order book for %s", symbol)
+	log.WithField("symbol", symbol).Info("Completed request to get order book")
 	return &orderBook, nil
 }

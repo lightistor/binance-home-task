@@ -5,9 +5,9 @@ import (
 	"text/template"
 )
 
-type StatsSection struct {
-	Title string
-	Stats []*TickerChangeStatics
+type SymbolsSection struct {
+	Title  string
+	Values []*SymbolData
 }
 
 type NotionalValuesSection struct {
@@ -22,8 +22,8 @@ type SpreadsSection struct {
 
 type PageData struct {
 	PageTitle           string
-	TopVolumes          StatsSection
-	TopNumberOfTrades   StatsSection
+	TopVolumes          SymbolsSection
+	TopNumberOfTrades   SymbolsSection
 	TotalNotionalValues NotionalValuesSection
 	SpreadValues        SpreadsSection
 }
@@ -34,21 +34,21 @@ func (c *controller) index(w http.ResponseWriter, req *http.Request) {
 
 	marketData, _ := service.GetMarketData(
 		&MarketDataQuery{
-			VolumeQuoteAsset:         "BTC",
-			NumberOfTradesQuoteAsset: "USDT",
+			VolumeQuoteAsset:     "BTC",
+			TradeCountQuoteAsset: "USDT",
 		})
 
 	tmpl := template.Must(template.ParseFiles("index.html"))
 
 	data := PageData{
 		PageTitle: "Binance Market Data",
-		TopVolumes: StatsSection{
-			Title: "Top 5 highest volume over the last 24h for quote asset BTC",
-			Stats: marketData.TopVolume,
+		TopVolumes: SymbolsSection{
+			Title:  "Top 5 highest volume over the last 24h for quote asset BTC",
+			Values: marketData.TopVolumes,
 		},
-		TopNumberOfTrades: StatsSection{
-			Title: "Top 5 highest number of trades over the last 24h for quote asset USDT",
-			Stats: marketData.TopNumberOfTrades,
+		TopNumberOfTrades: SymbolsSection{
+			Title:  "Top 5 highest number of trades over the last 24h for quote asset USDT",
+			Values: marketData.TopNumberOfTrades,
 		},
 		TotalNotionalValues: NotionalValuesSection{
 			Title:  "Total notional value of the top 200 bids and asks",

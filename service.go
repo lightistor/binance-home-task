@@ -9,20 +9,26 @@ import (
 )
 
 const (
-	NO_VALUE    string = ""
-	ITEMS_COUNT int    = 5
+	NO_VALUE  string = ""
+	TOP_LIMIT int    = 5
 )
 
 type MarketDataQuery struct {
-	VolumeQuoteAsset         string
-	NumberOfTradesQuoteAsset string
+	VolumeQuoteAsset     string
+	TradeCountQuoteAsset string
 }
 
 type MarketData struct {
-	TopVolume           []*TickerChangeStatics
-	TopNumberOfTrades   []*TickerChangeStatics
+	TopVolumes          []*SymbolData
+	TopNumberOfTrades   []*SymbolData
 	TotalNotionalValues []*TotalNotionalValue
 	Spreads             []*Spread
+}
+
+type SymbolData struct {
+	Symbol     string
+	Volume     decimal.Decimal
+	TradeCount int
 }
 
 type TotalNotionalValue struct {
@@ -38,115 +44,134 @@ type Spread struct {
 	Value      decimal.Decimal
 }
 
-type stats []*TickerChangeStatics
-
-func (s stats) Len() int      { return len(s) }
-func (s stats) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// ByVolume implements sort.Interface
-type ByVolume struct{ stats }
-
-func (s ByVolume) Less(i, j int) bool { return s.stats[i].Volume > s.stats[j].Volume }
-
-// ByVolume implements sort.Interface
-type ByNumberOfTrades struct{ stats }
-
-func (s ByNumberOfTrades) Less(i, j int) bool { return s.stats[i].Tradecount > s.stats[j].Tradecount }
-
 type MarketDataService interface {
 	GetMarketData(query *MarketDataQuery) (*MarketData, error)
+	GetTopSymbols(quoteAsset string, limit int, sort func(symbols []*SymbolData)) ([]*SymbolData, error)
+	GetTotalNotionalValues(symbols []string) ([]*TotalNotionalValue, error)
+	GetSpreads(symbols []string) ([]*Spread, error)
 }
 
 type service struct {
-	client ApiClient
+	client   ApiClient
+	metadata map[string]Symbol
 }
 
 func NewMarketDataService(c *ApiClient) MarketDataService {
-	return &service{
-		client: *c,
-	}
-}
-
-func (s *service) GetMarketData(q *MarketDataQuery) (*MarketData, error) {
-	info, err := s.client.GetExchangeInfo()
+	info, err := (*c).GetExchangeInfo()
 	if err != nil {
-		log.Error("Error occurred while getting exchange info")
-		return nil, err
+		log.Fatal("Error occurred while getting exchange info")
 	}
 
-	log.Infof("Get %d symbols from exchange info", len(info.Symbols))
 	metadata := make(map[string]Symbol, len(info.Symbols))
 	for i := range info.Symbols {
 		s := info.Symbols[i]
 		metadata[s.Symbol] = s
 	}
 
-	tickerStats, err := s.client.GetTickerChangeStatistics(NO_VALUE)
+	return &service{
+		client:   *c,
+		metadata: metadata,
+	}
+}
+
+func (s *service) GetMarketData(q *MarketDataQuery) (*MarketData, error) {
+
+	// get top volumes
+	byVolumeSort := func(symbols []*SymbolData) {
+		sort.Sort(ByVolume{symbols: symbols})
+	}
+	topVolumes, _ := s.GetTopSymbols(
+		q.VolumeQuoteAsset, TOP_LIMIT, byVolumeSort)
+
+	// get top number of trades
+	byTradeCountSort := func(symbols []*SymbolData) {
+		sort.Sort(ByTradeCount{symbols: symbols})
+	}
+	topNumberOfTrades, _ := s.GetTopSymbols(
+		q.TradeCountQuoteAsset, TOP_LIMIT, byTradeCountSort)
+
+	// get total notional values
+	var tnvTargets []string
+	for _, v := range topVolumes {
+		tnvTargets = append(tnvTargets, v.Symbol)
+	}
+	totalNotionalValues, _ := s.GetTotalNotionalValues(tnvTargets)
+
+	// get spreds
+	var spreadTargets []string
+	for _, v := range topNumberOfTrades {
+		spreadTargets = append(spreadTargets, v.Symbol)
+	}
+	spreads, _ := s.GetSpreads(spreadTargets)
+
+	return &MarketData{
+		TopVolumes:          topVolumes,
+		TopNumberOfTrades:   topNumberOfTrades,
+		TotalNotionalValues: totalNotionalValues,
+		Spreads:             spreads,
+	}, nil
+}
+
+func (s *service) GetTopSymbols(
+	quoteAsset string, limit int, sort func(symbols []*SymbolData),
+) ([]*SymbolData, error) {
+	stats, err := s.client.GetTickerChangeStatistics(NO_VALUE)
 	if err != nil {
 		log.Error("Error occurred while getting ticker change statistics")
 		return nil, err
 	}
 
-	var volumes []*TickerChangeStatics
-	var numberOfTrades []*TickerChangeStatics
-	for _, t := range tickerStats {
-		s := metadata[t.Symbol]
-		if s.Quoteasset == q.VolumeQuoteAsset {
-			volumes = append(volumes, t)
-		}
-		if s.Quoteasset == q.NumberOfTradesQuoteAsset {
-			numberOfTrades = append(numberOfTrades, t)
+	var symbols []*SymbolData
+	for _, t := range stats {
+		s := s.metadata[t.Symbol]
+		if s.Quoteasset == quoteAsset {
+			vol, _ := decimal.NewFromString(t.Volume)
+			symbols = append(symbols, &SymbolData{
+				Symbol:     t.Symbol,
+				Volume:     vol,
+				TradeCount: t.Tradecount,
+			})
 		}
 	}
-	log.WithField("quoteAsset", q.VolumeQuoteAsset).Infof("Found %d symbols to sort by volume", len(volumes))
-	log.WithField("quoteAsset", q.NumberOfTradesQuoteAsset).Infof("Found %d symbols to sort by number of trades", len(numberOfTrades))
 
-	sort.Sort(ByVolume{volumes})
-	sort.Sort(ByNumberOfTrades{numberOfTrades})
+	log.WithField("quoteAsset", quoteAsset).Infof(
+		"Found %d symbols to sort", len(symbols))
 
-	topVolumes := volumes[:ITEMS_COUNT]
-	topNumberOfTrades := numberOfTrades[:ITEMS_COUNT]
+	sort(symbols)
 
-	totalNotionalValues := make([]*TotalNotionalValue, ITEMS_COUNT)
-	spreadValues := make([]*Spread, ITEMS_COUNT)
-	queuSize := ITEMS_COUNT * 2
-	sem := make(chan int, queuSize) // semaphore pattern
-	for i, v := range topVolumes {
-		v1 := v
+	if len(symbols) > limit {
+		symbols = symbols[:limit]
+	}
+
+	return symbols, nil
+}
+
+func (s *service) GetTotalNotionalValues(symbols []string) ([]*TotalNotionalValue, error) {
+	var aerr error
+	sem := make(chan int, len(symbols))
+	tnvs := make([]*TotalNotionalValue, len(symbols))
+	for i, symbol := range symbols {
+		s1 := symbol
 		i1 := i
 		go func() {
-			value, err := s.getTotalNotionalValue(v1.Symbol)
-			if err == nil {
-				totalNotionalValues[i1] = value
+			value, err := s.getTotalNotionalValue(s1)
+			if err != nil {
+				aerr = err
 			}
+			tnvs[i1] = value
 			sem <- 1
 		}()
 	}
-
-	for i, v := range topNumberOfTrades {
-		v1 := v
-		i1 := i
-		go func() {
-			value, err := s.getSpread(v1.Symbol)
-			if err == nil {
-				spreadValues[i1] = value
-			}
-			sem <- 1
-		}()
-	}
-
-	log.Info("Wait for goroutines to finish")
-	for i := 0; i < queuSize; i++ {
+	for i := 0; i < len(symbols); i++ {
 		<-sem
 	}
-	log.Info("All goroutines finished")
 
-	return &MarketData{
-		TopVolume:           topVolumes,
-		TopNumberOfTrades:   topNumberOfTrades,
-		TotalNotionalValues: totalNotionalValues,
-		Spreads:             spreadValues,
-	}, nil
+	if aerr != nil {
+		log.Error("Erorr occurred while getting total notional values")
+		return nil, aerr
+	}
+
+	return tnvs, nil
 }
 
 func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, error) {
@@ -183,6 +208,34 @@ func (s *service) getTotalNotionalValue(symbol string) (*TotalNotionalValue, err
 		AsksTotal: asksTotal,
 		BidsTotal: bidsTotal,
 	}, nil
+}
+
+func (s *service) GetSpreads(symbols []string) ([]*Spread, error) {
+	var aerr error
+	sem := make(chan int, len(symbols))
+	spreads := make([]*Spread, len(symbols))
+	for i, symbol := range symbols {
+		s1 := symbol
+		i1 := i
+		go func() {
+			value, err := s.getSpread(s1)
+			if err != nil {
+				aerr = err
+			}
+			spreads[i1] = value
+			sem <- 1
+		}()
+	}
+	for i := 0; i < len(symbols); i++ {
+		<-sem
+	}
+
+	if aerr != nil {
+		log.Error("Erorr occurred while getting spreads")
+		return nil, aerr
+	}
+
+	return spreads, nil
 }
 
 func (s *service) getSpread(symbol string) (*Spread, error) {
