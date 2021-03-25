@@ -2,15 +2,21 @@ package main
 
 import (
 	"sort"
+	"time"
 
 	"github.com/jasonlvhit/gocron"
+	"github.com/patrickmn/go-cache"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 )
 
+const TOP_TRADE_COUNT_KEY = "topTradeCount"
+
+var topTradeCountCache = cache.New(time.Duration(5)*time.Minute, time.Duration(5)*time.Minute)
+
 type background struct {
 	service MarketDataService
-	state   map[string]decimal.Decimal
+	state   map[string]*SpreadMetric
 }
 
 type BackgroundService interface {
@@ -20,7 +26,7 @@ type BackgroundService interface {
 func NewBackgroundService(s *MarketDataService) BackgroundService {
 	return &background{
 		service: *s,
-		state:   make(map[string]decimal.Decimal),
+		state:   make(map[string]*SpreadMetric),
 	}
 }
 
@@ -31,11 +37,19 @@ func (b *background) Start() {
 
 func (b *background) backgroundTask() {
 	// get top number of trades
-	byTradeCountSort := func(symbols []*SymbolData) {
-		sort.Sort(ByTradeCount{symbols: symbols})
+	// cached or fetch from api
+	var topNumberOfTrades []*SymbolData
+	if x, found := topTradeCountCache.Get(TOP_TRADE_COUNT_KEY); found {
+		topNumberOfTrades = x.([]*SymbolData)
+	} else {
+		byTradeCountSort := func(symbols []*SymbolData) {
+			sort.Sort(ByTradeCount{symbols: symbols})
+		}
+		topNumberOfTrades, _ = b.service.GetTopSymbols(
+			"USDT", TOP_LIMIT, byTradeCountSort)
+
+		topTradeCountCache.SetDefault(TOP_TRADE_COUNT_KEY, topNumberOfTrades)
 	}
-	topNumberOfTrades, _ := b.service.GetTopSymbols(
-		"USDT", TOP_LIMIT, byTradeCountSort)
 
 	// get spreds
 	var spreadTargets []string
@@ -44,27 +58,35 @@ func (b *background) backgroundTask() {
 	}
 	spreads, _ := b.service.GetSpreads(spreadTargets)
 
-	// calc delta, print, update current
 	var delta decimal.Decimal
-	var deltaSign string
-	for _, s := range spreads {
-		if old, found := b.state[s.Symbol]; found {
-			delta = s.Value.Add(old.Neg())
-			if delta.IsPositive() {
-				deltaSign = "+"
-			} else if delta.IsNegative() {
-				// delta has '-' already
-				deltaSign = ""
-			} else {
-				// no change
-				deltaSign = "="
-			}
-
-			log.Infof("%s: %s (%s%s)", s.Symbol, s.Value, deltaSign, delta)
+	newState := make(map[string]*SpreadMetric)
+	for _, spread := range spreads {
+		if old, found := b.state[spread.Symbol]; found {
+			delta = spread.Value.Add(old.spread.Value.Neg())
+			b.printSpreadData(spread, delta)
 		} else {
-			log.Infof("%s: %s (n/a)", s.Symbol, s.Value)
+			b.printSpreadData(spread, decimal.Zero)
 		}
-
-		b.state[s.Symbol] = s.Value
+		newState[spread.Symbol] = &SpreadMetric{spread, delta}
 	}
+	b.state = newState
+
+	// use a cache with auto-expire as a communication channel
+	// so prometheus collector will report spread data or none
+	// regardless of its scrape interval
+	MetricsCache.SetDefault(SPREAD_METRICS_KEY, newState)
+}
+
+func (b *background) printSpreadData(spread *Spread, delta decimal.Decimal) {
+	// print to logger out
+	var deltaSign string
+	switch delta.Sign() {
+	case 1:
+		deltaSign = "+"
+	case -1:
+		deltaSign = "-"
+	case 0:
+		deltaSign = "="
+	}
+	log.Infof("%s: %s (%s%s)", spread.Symbol, spread.Value, deltaSign, delta.Abs())
 }

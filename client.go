@@ -17,9 +17,7 @@ const (
 	TICKER_KEY        = "ticker"
 )
 
-var (
-	clientCache = cache.New(time.Duration(1)*time.Second, time.Duration(1)*time.Second)
-)
+var clientCache = cache.New(time.Duration(1)*time.Second, time.Duration(1)*time.Second)
 
 type ApiClient interface {
 	GetExchangeInfo() (*ExchangeInfoResponse, error)
