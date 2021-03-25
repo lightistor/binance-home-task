@@ -10,7 +10,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const TOP_TRADE_COUNT_KEY = "topTradeCount"
+const (
+	TOP_TRADE_COUNT_KEY        = "topTradeCount"
+	SPREAD_METRICS_QUOTE_ASSET = "USDT"
+)
 
 var topTradeCountCache = cache.New(time.Duration(5)*time.Minute, time.Duration(5)*time.Minute)
 
@@ -46,7 +49,7 @@ func (b *background) backgroundTask() {
 			sort.Sort(ByTradeCount{symbols: symbols})
 		}
 		topNumberOfTrades, _ = b.service.GetTopSymbols(
-			"USDT", TOP_LIMIT, byTradeCountSort)
+			SPREAD_METRICS_QUOTE_ASSET, TOP_LIMIT, byTradeCountSort)
 
 		topTradeCountCache.SetDefault(TOP_TRADE_COUNT_KEY, topNumberOfTrades)
 	}
