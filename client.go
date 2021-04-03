@@ -14,10 +14,7 @@ import (
 
 const (
 	EXCHANGE_INFO_KEY = "exchangeInfo"
-	TICKER_KEY        = "ticker"
 )
-
-var clientCache = cache.New(time.Duration(1)*time.Second, time.Duration(1)*time.Second)
 
 type ApiClient interface {
 	GetExchangeInfo() (*ExchangeInfoResponse, error)
@@ -25,15 +22,21 @@ type ApiClient interface {
 	GetOrderBook(symbol string, limit int) (*OrderBook, error)
 }
 
-type client struct{}
+type client struct {
+	infoCache   *cache.Cache
+	tickerCache *cache.Cache
+}
 
 func NewApiClient() ApiClient {
-	return &client{}
+	return &client{
+		infoCache:   cache.New(time.Duration(10)*time.Minute, time.Duration(10)*time.Minute),
+		tickerCache: cache.New(time.Duration(1)*time.Second, time.Duration(1)*time.Second),
+	}
 }
 
 func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 	var info *ExchangeInfoResponse
-	if x, found := clientCache.Get(EXCHANGE_INFO_KEY); found {
+	if x, found := c.infoCache.Get(EXCHANGE_INFO_KEY); found {
 		info = x.(*ExchangeInfoResponse)
 		log.Debug("Used cache to get exchange info")
 		return info, nil
@@ -57,7 +60,7 @@ func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 		log.Fatal(err)
 	}
 
-	clientCache.Set(EXCHANGE_INFO_KEY, info, time.Duration(10)*time.Minute)
+	c.infoCache.SetDefault(EXCHANGE_INFO_KEY, info)
 
 	weight := response.Header.Get("x-mbx-used-weight")
 	log.WithField("weight-used", weight).Debug("Completed request to get exchange info")
@@ -66,7 +69,7 @@ func (c *client) GetExchangeInfo() (*ExchangeInfoResponse, error) {
 
 func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatics, error) {
 	var stats []*TickerChangeStatics
-	if x, found := clientCache.Get(TICKER_KEY + symbol); found {
+	if x, found := c.tickerCache.Get(symbol); found {
 		stats = x.([]*TickerChangeStatics)
 		log.Debug("Used cache to get ticker change statistics")
 		return stats, nil
@@ -109,7 +112,7 @@ func (c *client) GetTickerChangeStatistics(symbol string) ([]*TickerChangeStatic
 		return nil, err
 	}
 
-	clientCache.Set(TICKER_KEY+symbol, stats, cache.DefaultExpiration)
+	c.tickerCache.SetDefault(symbol, stats)
 
 	weight := response.Header.Get("x-mbx-used-weight")
 	log.WithFields(log.Fields{
